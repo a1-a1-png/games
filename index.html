@@ -43,10 +43,9 @@
 <body>
   <div class="container">
     <h1>幸运刮刮卡</h1>
-    <div class="prize-list" id="prizeList"></div>
     <canvas id="scratchCard" width="300" height="120"></canvas>
-    <div class="tip" id="tip">用鼠标或手指刮开灰色区域查看中奖信息</div>
-    <button class="btn-reset" id="resetBtn" style="display:none;">再来一次</button>
+    <div class="tip">用鼠标或手指刮开灰色区域查看中奖信息</div>
+    <button id="resetBtn" style="margin-top:12px;padding:6px 18px;border:none;border-radius:6px;background:#ff9800;color:#fff;font-size:15px;cursor:pointer;">再来一次</button>
   </div>
   <script>
     const prizeConfig = [
@@ -55,18 +54,28 @@
       { name: "三等奖：10元话费", probability: 0.25 }
       // 其余为未中奖
     ];
+    let prizeText = '恭喜你，中奖了！🎉';
     const canvas = document.getElementById('scratchCard');
     const ctx = canvas.getContext('2d');
-    const prizeText = '恭喜你，中奖了！🎉';
+    // 随机抽奖
+    function randomPrize() {
+      let r = Math.random();
+      let sum = 0;
+      for (let i = 0; i < prizeConfig.length; i++) {
+        sum += prizeConfig[i].probability;
+        if (r < sum) return prizeConfig[i].name;
+      }
+      return null; // 未中奖
+    }
     // 绘制中奖信息
     function drawPrize() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#fffbe6';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.font = 'bold 28px 微软雅黑';
-      ctx.fillStyle = '#ff9800';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ff9800';
       ctx.fillText(prizeText, canvas.width / 2, canvas.height / 2);
     }
     // 绘制遮罩层
@@ -86,8 +95,6 @@
     drawPrize();
     drawMask();
     let isDrawing = false;
-    let finished = false;
-    let prizeResult = false;
     function getPos(e) {
       let x, y;
       if (e.touches) {
@@ -137,24 +144,32 @@
     });
     // 判断刮开面积
     function checkClear() {
-      if (finished) return;
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       let cleared = 0;
       for (let i = 0; i < imgData.data.length; i += 4) {
         if (imgData.data[i + 3] === 0) cleared++;
       }
       if (cleared > imgData.data.length / 8) { // 刮开超过1/4
-        finished = true;
         setTimeout(() => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           drawPrize();
-          tip.textContent = prizeResult ? '恭喜中奖！点击"再来一次"继续' : '未中奖，点击"再来一次"试试手气';
-          resetBtn.style.display = '';
         }, 300);
       }
     }
-    resetBtn.addEventListener('click', () => {
-      initCard();
-    });
+    // 再来一次按钮功能
+    document.getElementById('resetBtn').onclick = function() {
+      // 重新抽奖
+      let result = randomPrize();
+      if (result) {
+        prizeText = result;
+      } else {
+        prizeText = '很遗憾，未中奖';
+      }
+      drawPrize();
+      drawMask();
+      // 恢复初始提示
+      document.querySelector('.tip').textContent = '用鼠标或手指刮开灰色区域查看中奖信息';
+    };
   </script>
 </body>
 </html> 
