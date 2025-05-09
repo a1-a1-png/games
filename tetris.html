@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄罗斯方块网页版</title>
+    <style>
+        body {
+            background: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%);
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            color: #333;
+            margin-top: 30px;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        .container {
+            display: flex;
+            gap: 40px;
+            margin-top: 20px;
+        }
+        #tetris {
+            background: #222;
+            border-radius: 10px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        }
+        .info {
+            background: rgba(255,255,255,0.9);
+            border-radius: 10px;
+            padding: 24px 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            min-width: 260px;
+        }
+        .info h2 {
+            margin-top: 0;
+            color: #0077ff;
+        }
+        .score {
+            font-size: 1.3em;
+            margin: 10px 0 20px 0;
+            color: #222;
+        }
+        .desc {
+            font-size: 1em;
+            color: #444;
+            line-height: 1.7;
+        }
+        .btn {
+            display: inline-block;
+            margin-top: 18px;
+            padding: 8px 24px;
+            background: #0077ff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #005fcc;
+        }
+    </style>
+</head>
+<body>
+    <h1>俄罗斯方块网页版</h1>
+    <div class="container">
+        <canvas id="tetris" width="240" height="480"></canvas>
+        <div class="info">
+            <h2>游戏说明</h2>
+            <div class="desc">
+                <b>操作方法：</b><br>
+                &#8592; 左移<br>
+                &#8594; 右移<br>
+                &#8595; 加速下落<br>
+                &#8593; 旋转方块<br>
+                空格键：一键到底<br>
+                <br>
+                <b>目标：</b><br>
+                通过移动和旋转方块，使其填满一行即可消除得分。游戏会随着分数提升逐渐加快速度。
+            </div>
+            <div class="score">分数：<span id="score">0</span></div>
+            <button class="btn" onclick="startGame()">重新开始</button>
+        </div>
+    </div>
+    <script>
+// 游戏参数
+const COLS = 10;
+const ROWS = 20;
+const BLOCK_SIZE = 24;
+const COLORS = [
+    null,
+    '#FF6666', // I
+    '#FFCC66', // O
+    '#66FF66', // S
+    '#66CCFF', // Z
+    '#CC99FF', // L
+    '#FF99CC', // J
+    '#66FFFF'  // T
+];
+const SHAPES = [
+    [],
+    [ // I
+        [0,0,0,0],
+        [1,1,1,1],
+        [0,0,0,0],
+        [0,0,0,0]
+    ],
+    [ // O
+        [2,2],
+        [2,2]
+    ],
+    [ // S
+        [0,3,3],
+        [3,3,0],
+        [0,0,0]
+    ],
+    [ // Z
+        [4,4,0],
+        [0,4,4],
+        [0,0,0]
+    ],
+    [ // L
+        [0,0,5],
+        [5,5,5],
+        [0,0,0]
+    ],
+    [ // J
+        [6,0,0],
+        [6,6,6],
+        [0,0,0]
+    ],
+    [ // T
+        [0,7,0],
+        [7,7,7],
+        [0,0,0]
+    ]
+];
+
+let canvas = document.getElementById('tetris');
+let ctx = canvas.getContext('2d');
+ctx.scale(BLOCK_SIZE, BLOCK_SIZE);
+
+let board, current, next, score, gameOver, dropInterval, dropCounter, lastTime;
+
+function resetBoard() {
+    board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+}
+
+function randomPiece() {
+    const typeId = Math.floor(Math.random() * (SHAPES.length - 1)) + 1;
+    const shape = SHAPES[typeId];
+    return {
+        pos: {x: Math.floor((COLS - shape[0].length) / 2), y: 0},
+        shape: shape,
+        type: typeId
+    };
+}
+
+function collide(board, piece) {
+    const {shape, pos} = piece;
+    for (let y = 0; y < shape.length; ++y) {
+        for (let x = 0; x < shape[y].length; ++x) {
+            if (shape[y][x] &&
+                (board[y + pos.y] && board[y + pos.y][x + pos.x]) !== 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function merge(board, piece) {
+    piece.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) {
+                board[y + piece.pos.y][x + piece.pos.x] = value;
+            }
+        });
+    });
+}
+
+function rotate(matrix) {
+    return matrix[0].map((_, i) => matrix.map(row => row[i])).reverse();
+}
+
+function playerRotate() {
+    const oldShape = current.shape;
+    const rotated = rotate(current.shape);
+    const oldX = current.pos.x;
+    let offset = 1;
+    current.shape = rotated;
+    while (collide(board, current)) {
+        current.pos.x += offset;
+        offset = -(offset + (offset > 0 ? 1 : -1));
+        if (offset > rotated[0].length) {
+            current.shape = oldShape;
+            current.pos.x = oldX;
+            return;
+        }
+    }
+}
+
+function playerDrop() {
+    current.pos.y++;
+    if (collide(board, current)) {
+        current.pos.y--;
+        merge(board, current);
+        resetPiece();
+        sweep();
+        if (collide(board, current)) {
+            gameOver = true;
+            dropInterval = null;
+        }
+    }
+    dropCounter = 0;
+}
+
+function hardDrop() {
+    while (!collide(board, current)) {
+        current.pos.y++;
+    }
+    current.pos.y--;
+    merge(board, current);
+    resetPiece();
+    sweep();
+    if (collide(board, current)) {
+        gameOver = true;
+        dropInterval = null;
+    }
+    dropCounter = 0;
+}
+
+function resetPiece() {
+    current = next;
+    next = randomPiece();
+    current.pos = {x: Math.floor((COLS - current.shape[0].length) / 2), y: 0};
+}
+
+function sweep() {
+    let lines = 0;
+    outer: for (let y = board.length - 1; y >= 0; --y) {
+        for (let x = 0; x < COLS; ++x) {
+            if (!board[y][x]) continue outer;
+        }
+        const row = board.splice(y, 1)[0].fill(0);
+        board.unshift(row);
+        ++lines;
+        ++y;
+    }
+    if (lines > 0) {
+        score += [0, 100, 300, 700, 1500][lines];
+        document.getElementById('score').textContent = score;
+        dropInterval = Math.max(100, 800 - Math.floor(score / 500) * 80);
+    }
+}
+
+function drawBlock(x, y, type) {
+    ctx.fillStyle = COLORS[type];
+    ctx.fillRect(x, y, 1, 1);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.08;
+    ctx.strokeRect(x + 0.04, y + 0.04, 0.92, 0.92);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, COLS, ROWS);
+    // 画已落下的方块
+    board.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) drawBlock(x, y, value);
+        });
+    });
+    // 画当前方块
+    current.shape.forEach((row, y) => {
+        row.forEach((value, x) => {
+            if (value) drawBlock(x + current.pos.x, y + current.pos.y, value);
+        });
+    });
+    if (gameOver) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, ROWS/2-2, COLS, 4);
+        ctx.fillStyle = '#fff';
+        ctx.font = '1.2px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('游戏结束', COLS/2, ROWS/2);
+    }
+}
+
+function update(time = 0) {
+    if (!dropInterval) return;
+    const delta = time - lastTime;
+    lastTime = time;
+    dropCounter += delta;
+    if (dropCounter > dropInterval) {
+        playerDrop();
+    }
+    draw();
+    if (!gameOver) requestAnimationFrame(update);
+}
+
+function startGame() {
+    resetBoard();
+    score = 0;
+    document.getElementById('score').textContent = score;
+    current = randomPiece();
+    next = randomPiece();
+    gameOver = false;
+    dropInterval = 800;
+    dropCounter = 0;
+    lastTime = 0;
+    update();
+}
+
+document.addEventListener('keydown', e => {
+    if (gameOver) return;
+    if (e.key === 'ArrowLeft') {
+        current.pos.x--;
+        if (collide(board, current)) current.pos.x++;
+    } else if (e.key === 'ArrowRight') {
+        current.pos.x++;
+        if (collide(board, current)) current.pos.x--;
+    } else if (e.key === 'ArrowDown') {
+        playerDrop();
+    } else if (e.key === 'ArrowUp') {
+        playerRotate();
+    } else if (e.code === 'Space') {
+        hardDrop();
+    }
+    draw();
+});
+
+startGame();
+    </script>
+</body>
+</html> 
