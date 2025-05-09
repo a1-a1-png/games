@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>井字棋小游戏</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f7f7f7 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        .container {
+            background: #fff;
+            margin-top: 40px;
+            padding: 32px 36px 28px 36px;
+            border-radius: 18px;
+            box-shadow: 0 8px 32px rgba(60, 60, 120, 0.18), 0 1.5px 4px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 340px;
+        }
+        h1 {
+            color: #3a3a6a;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+        .desc {
+            color: #555;
+            font-size: 1.05em;
+            background: #f1f5fa;
+            border-radius: 8px;
+            padding: 12px 18px;
+            margin-bottom: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 70px);
+            grid-template-rows: repeat(3, 70px);
+            gap: 12px;
+            margin-bottom: 22px;
+            margin-top: 8px;
+        }
+        .cell {
+            width: 70px;
+            height: 70px;
+            background: #f8fafc;
+            border: 2.5px solid #b3b3e6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #4f46e5;
+            cursor: pointer;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(79,70,229,0.07);
+            transition: background 0.2s, transform 0.12s, box-shadow 0.2s;
+            user-select: none;
+            animation: fadeIn 0.4s;
+        }
+        .cell:hover {
+            background: #e0e7ff;
+            transform: scale(1.07);
+            box-shadow: 0 4px 16px rgba(79,70,229,0.13);
+        }
+        .cell.filled {
+            cursor: not-allowed;
+            color: #a5b4fc;
+        }
+        #status {
+            font-size: 1.18em;
+            margin-bottom: 12px;
+            color: #2563eb;
+            min-height: 1.5em;
+            font-weight: 500;
+        }
+        #restart {
+            padding: 10px 28px;
+            font-size: 1.08em;
+            background: linear-gradient(90deg, #6366f1 0%, #60a5fa 100%);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(79,70,229,0.10);
+            transition: background 0.18s, transform 0.12s;
+        }
+        #restart:hover {
+            background: linear-gradient(90deg, #4338ca 0%, #2563eb 100%);
+            transform: scale(1.04);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @media (max-width: 500px) {
+            .container { min-width: 0; width: 98vw; padding: 10vw 2vw; }
+            #board { grid-template-columns: repeat(3, 22vw); grid-template-rows: repeat(3, 22vw); gap: 3vw; }
+            .cell { width: 22vw; height: 22vw; font-size: 2.2em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>井字棋小游戏</h1>
+        <div class="desc">
+            <b>游戏说明：</b><br>
+            1. 两名玩家轮流点击棋盘空格进行落子，玩家1为 <b>X</b>，玩家2为 <b>O</b>。<br>
+            2. 先在一行、一列或对角线上连成三个相同符号者获胜。<br>
+            3. 若棋盘填满且无人获胜，则为平局。<br>
+            4. 点击"重新开始"按钮可随时重置棋盘。<br>
+        </div>
+        <div id="status">玩家1（X）先手</div>
+        <div id="board"></div>
+        <button id="restart">重新开始</button>
+    </div>
+    <script>
+        const boardElem = document.getElementById('board');
+        const statusElem = document.getElementById('status');
+        const restartBtn = document.getElementById('restart');
+        let board = Array(3).fill(null).map(() => Array(3).fill(''));
+        let currentPlayer = 'X';
+        let gameOver = false;
+
+        function renderBoard() {
+            boardElem.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.textContent = board[i][j];
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    if (board[i][j] !== '') cell.classList.add('filled');
+                    cell.onclick = handleCellClick;
+                    boardElem.appendChild(cell);
+                }
+            }
+        }
+
+        function handleCellClick(e) {
+            if (gameOver) return;
+            const row = e.target.dataset.row;
+            const col = e.target.dataset.col;
+            if (board[row][col] !== '') return;
+            board[row][col] = currentPlayer;
+            renderBoard();
+            if (checkWin(currentPlayer)) {
+                statusElem.textContent = `🎉 恭喜，玩家${currentPlayer === 'X' ? '1' : '2'}（${currentPlayer}）获胜！`;
+                gameOver = true;
+                return;
+            }
+            if (checkDraw()) {
+                statusElem.textContent = '🤝 平局！';
+                gameOver = true;
+                return;
+            }
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            statusElem.textContent = `玩家${currentPlayer === 'X' ? '1' : '2'}（${currentPlayer}）的回合`;
+        }
+
+        function checkWin(player) {
+            // 行、列、对角线
+            for (let i = 0; i < 3; i++) {
+                if (board[i][0] === player && board[i][1] === player && board[i][2] === player) return true;
+                if (board[0][i] === player && board[1][i] === player && board[2][i] === player) return true;
+            }
+            if (board[0][0] === player && board[1][1] === player && board[2][2] === player) return true;
+            if (board[0][2] === player && board[1][1] === player && board[2][0] === player) return true;
+            return false;
+        }
+
+        function checkDraw() {
+            return board.flat().every(cell => cell !== '');
+        }
+
+        restartBtn.onclick = function() {
+            board = Array(3).fill(null).map(() => Array(3).fill(''));
+            currentPlayer = 'X';
+            gameOver = false;
+            statusElem.textContent = '玩家1（X）先手';
+            renderBoard();
+        };
+
+        renderBoard();
+    </script>
+</body>
+</html> 
