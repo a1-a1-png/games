@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=320, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>幸运刮刮卡</title>
+  <title>自定义奖项刮刮卡</title>
   <style>
     body {
       background: #f7f7f7;
@@ -18,7 +18,7 @@
     .container {
       background: #fff;
       border-radius: 16px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
       padding: 32px 24px 24px 24px;
       display: flex;
       flex-direction: column;
@@ -44,11 +44,6 @@
       font-size: 15px;
       margin-bottom: 8px;
     }
-    .count {
-      color: #ff9800;
-      font-size: 16px;
-      margin-bottom: 8px;
-    }
     .btn-reset {
       margin-top: 10px;
       padding: 6px 18px;
@@ -59,56 +54,94 @@
       font-size: 15px;
       cursor: pointer;
       transition: background 0.2s;
+      display: none;
     }
     .btn-reset:active {
       background: #e68900;
+    }
+    .prize-list {
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #666;
+      text-align: left;
+      width: 100%;
+      max-width: 300px;
+    }
+    .prize-list strong {
+      color: #ff9800;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>幸运刮刮卡</h1>
-    <div class="count" id="countInfo"></div>
+    <div class="prize-list" id="prizeList"></div>
     <canvas id="scratchCard" width="300" height="120"></canvas>
     <div class="tip" id="tip">用鼠标或手指刮开灰色区域查看中奖信息</div>
-    <button class="btn-reset" id="resetBtn" style="display:none;">再来一次</button>
+    <button class="btn-reset" id="resetBtn">再来一次</button>
   </div>
   <script>
-    const MAX_TIMES = 5;
+    // ====== 这里配置奖项和概率（概率为0~1之间的小数）======
+    const prizeConfig = [
+      { name: "一等奖：iPhone 15", probability: 0.05 },
+      { name: "二等奖：50元京东卡", probability: 0.10 },
+      { name: "三等奖：10元话费", probability: 0.25 }
+      // 其余为未中奖
+    ];
+    // =====================================================
+
     const canvas = document.getElementById('scratchCard');
     const ctx = canvas.getContext('2d');
     const tip = document.getElementById('tip');
-    const countInfo = document.getElementById('countInfo');
     const resetBtn = document.getElementById('resetBtn');
+    const prizeListDiv = document.getElementById('prizeList');
 
-    // 获取已刮次数
-    function getTimes() {
-      return parseInt(localStorage.getItem('scratch_times') || '0', 10);
-    }
-    // 设置已刮次数
-    function setTimes(n) {
-      localStorage.setItem('scratch_times', n);
+    // 展示奖项列表
+    function renderPrizeList() {
+      let html = '<strong>奖项设置：</strong><br>';
+      let total = 0;
+      prizeConfig.forEach((p, i) => {
+        html += `${i+1}. ${p.name}（概率${Math.round(p.probability*100)}%）<br>`;
+        total += p.probability;
+      });
+      if (total < 1) {
+        html += `未中奖（概率${Math.round((1-total)*100)}%）`;
+      }
+      prizeListDiv.innerHTML = html;
     }
 
-    // 初始化中奖结果
-    let isWin = false;
+    // 中奖结果
+    let prizeResult = null;
     let finished = false;
 
-    function randomWin() {
-      // 40%概率中奖
-      return Math.random() < 0.4;
+    // 随机抽奖
+    function randomPrize() {
+      let r = Math.random();
+      let sum = 0;
+      for (let i = 0; i < prizeConfig.length; i++) {
+        sum += prizeConfig[i].probability;
+        if (r < sum) return prizeConfig[i].name;
+      }
+      return null; // 未中奖
     }
 
     function drawPrize() {
-      ctx.globalCompositeOperation = 'source-over'; // 关键，防止中奖信息被“挖空”
+      ctx.globalCompositeOperation = 'source-over';
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#fffbe6';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.font = 'bold 28px 微软雅黑';
+      ctx.font = 'bold 24px 微软雅黑';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = isWin ? '#ff9800' : '#888';
-      ctx.fillText(isWin ? '恭喜你，中奖了！🎉' : '很遗憾，未中奖', canvas.width / 2, canvas.height / 2);
+      if (prizeResult) {
+        ctx.fillStyle = '#ff9800';
+        ctx.fillText(`恭喜获得`, canvas.width / 2, canvas.height / 2 - 18);
+        ctx.font = 'bold 22px 微软雅黑';
+        ctx.fillText(prizeResult, canvas.width / 2, canvas.height / 2 + 18);
+      } else {
+        ctx.fillStyle = '#888';
+        ctx.fillText('很遗憾，未中奖', canvas.width / 2, canvas.height / 2);
+      }
     }
 
     function drawMask() {
@@ -122,14 +155,9 @@
       ctx.fillText('刮一刮', canvas.width / 2, canvas.height / 2);
     }
 
-    function updateCountInfo() {
-      const times = getTimes();
-      countInfo.textContent = `今日剩余刮卡次数：${Math.max(0, MAX_TIMES - times)} / ${MAX_TIMES}`;
-    }
-
     function initCard() {
       finished = false;
-      isWin = randomWin();
+      prizeResult = randomPrize();
       drawPrize();
       drawMask();
       tip.textContent = '用鼠标或手指刮开灰色区域查看中奖信息';
@@ -172,20 +200,8 @@
         finished = true;
         setTimeout(() => {
           drawPrize();
-          tip.textContent = isWin ? '恭喜中奖！点击“再来一次”继续' : '未中奖，点击“再来一次”试试手气';
-          let times = getTimes() + 1;
-          setTimes(times);
-          updateCountInfo();
-          if (times < MAX_TIMES) {
-            resetBtn.style.display = '';
-          } else {
-            tip.textContent = '今日刮卡次数已用完，欢迎明天再来！';
-            resetBtn.style.display = 'none';
-            // 灰色遮罩覆盖
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.fillStyle = 'rgba(187,187,187,0.7)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-          }
+          tip.textContent = prizeResult ? '恭喜中奖！点击“再来一次”继续' : '未中奖，点击“再来一次”试试手气';
+          resetBtn.style.display = '';
         }, 300);
       }
     }
@@ -193,7 +209,6 @@
     // 事件绑定
     canvas.addEventListener('mousedown', e => {
       if (finished) return;
-      if (getTimes() >= MAX_TIMES) return;
       isDrawing = true;
       scratch(e);
     });
@@ -207,7 +222,6 @@
     });
     canvas.addEventListener('touchstart', e => {
       if (finished) return;
-      if (getTimes() >= MAX_TIMES) return;
       isDrawing = true;
       scratch(e);
       e.preventDefault();
@@ -223,27 +237,13 @@
 
     // 再来一次
     resetBtn.addEventListener('click', () => {
-      if (getTimes() >= MAX_TIMES) {
-        tip.textContent = '今日刮卡次数已用完，欢迎明天再来！';
-        resetBtn.style.display = 'none';
-        return;
-      }
       initCard();
     });
 
     // 初始化
     function main() {
-      updateCountInfo();
-      if (getTimes() >= MAX_TIMES) {
-        drawPrize();
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(187,187,187,0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        tip.textContent = '今日刮卡次数已用完，欢迎明天再来！';
-        resetBtn.style.display = 'none';
-      } else {
-        initCard();
-      }
+      renderPrizeList();
+      initCard();
     }
     main();
   </script>
